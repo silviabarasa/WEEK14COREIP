@@ -1,0 +1,281 @@
+---
+title: "week14-_Part 1 Dimensionality Reduction using PCA AND part 2  Feature Selection"
+author: "Silvia Wakasa Barasa"
+date: "7/16/2021"
+output: html_document
+---
+
+```{r}
+library(knitr)
+```
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE,eval=TRUE)
+```
+
+# **PROBLEM DEFINITION**
+## **a) Specifying the Question**
+
+reducing your dataset to a low dimensional dataset using the PCA
+
+## **b) Defining the metrics for success**
+
+This section of the project entails reducing your dataset to a low dimensional dataset using the PCA. You will be required to perform your analysis and provide insights gained from your analysis.
+
+## **c) Understanding the context**
+
+You are a Data analyst at Carrefour Kenya and are currently undertaking a project that will inform the marketing department on the most relevant marketing strategies that will result in the highest no. of sales (total price including tax). Your project has been divided into four parts where you'll explore a recent marketing dataset by performing various unsupervised learning techniques and later providing recommendations based on your insights.
+
+## **d) Recording the Experimental Design**
+
+1.   Define the question, the metric for success, the context, experimental design taken.
+2. Read and explore the given dataset.
+3. reducing your dataset to a low dimensional dataset using the PCA
+ 
+## **e) Relevance of the data**
+
+The data used for this project will inform the marketing department on the most relevant marketing strategies that will result in the highest no. of sales (total price including tax)
+
+[http://bit.ly/CarreFourDataset]
+
+
+## **Loading and checking data**
+```{r}
+sales <- read.csv("C:/Users/Silvia/Documents/R module3 Core/week3/Supermarket_Dataset_1 - Sales Data.csv",stringsAsFactors = T)
+head(sales)
+```
+
+```{r}
+#Checking for size of dataset
+dim(sales)
+```
+
+```{r}
+#Checking for descriptive statistics and Null variables
+#And datatypes
+summary(sales)
+```
+* From the summary, we can deduce the following from the data: 1. We have 1000 records and 16 attributes 2. Out of the 16 attributes, 8 are
+of data type character 3. We don’t have any null values 4. Looking at the ranges around the summary statistics of our numeric variables, we
+see that they are measured in different units hence we will need to scale later
+
+```{r}
+head(sales)
+```
+
+## **Tidying the data**
+```{r}
+#Checking to see how many unique values are in each variable
+rapply(sales,function(x)length(unique(x)))
+```
+* From output, a few columns don't seem to make sense so we go forward and check them out
+
+```{r}
+#Checking list of unique values for every column
+ulst <- lapply(sales, unique)
+ulst
+```
+* We don’t have any abnormal entries. So we go ahead to drop the column for InvoiceID since it is only a unique ID for every transaction and will not be necessary for this analysis and the gross margin percentage since it is constant at 4.76 for all transactions.
+```{r}
+#Dropping columns
+sales <- subset(sales, select = -c(Invoice.ID,gross.margin.percentage))
+```
+
+```{r}
+head(sales)
+```
+## Exploratory Data Analysis
+```{r}
+nums <- subset(sales, select = -c(Branch, Customer.type,Gender,Product.line,Date, Time, Payment))
+head(nums)
+```
+```{r}
+library(tidyr)
+library(ggplot2)
+library(magrittr)
+library(dplyr)
+library(psych)
+```
+```{r}
+# Central tendecy values for numerical variables
+describe(nums)
+```
+```{r}
+#Distributions of different variables
+par( mfrow= c ( 2 , 4 ))
+for(i in 1 : length(nums)) {
+hist(nums[,i], main= names(nums[i]), xlab = names(nums[i]))
+}
+
+```
+* Our numerical variables don’t follow a normal distribution. * Amount purchased per unit price seems to vary at all prices though a unit price of 90 to 100 has the highest
+number of customer entries * Amount purchased seems to decrease with increase in Total and gross income, tax and cogs, with highest
+frequency levels being where variable values are least.
+
+#### **Checking how different factors affect our target variable “Total”**
+```{r}
+#Distribution of income per Gender
+ggplot(sales,
+aes(x = Total,
+fill = Gender)) +
+geom_density(alpha = 0.4) +
+labs(title = "Distribution of total income per Gender")
+```
+* For Totals between 0 and 280 there seem to be more male than female though the frequency of females for totals exceeding 280 seems to surpass male
+
+```{r}
+#Salary distribution by rank
+ggplot(sales,
+aes(x = Total,
+fill = Customer.type)) +
+geom_density(alpha = 0.4) +
+labs(title = "Salary distribution by rank")
+```
+* Normal customers seem to have a greater influence on total than members.
+```{r}
+#Distribution of Total income per Branch
+ggplot(sales,
+aes(x = Total,
+fill = Branch)) +
+geom_density(alpha = 0.4) +
+labs(title = "Distribution of Total income per Branch")
+```
+* * Branch A contributes more to total and Branch C contributes the least
+```{r}
+#Distribution of Total per Payment method
+ggplot(sales,
+aes(x = Total,
+fill = Payment)) +
+geom_density(alpha = 0.4) +
+labs(title = "Distribution of Total income per Payment method")
+```
+```{r}
+#What quantity was mostly purchased in the store
+ggplot(sales, aes(x = Quantity)) +
+geom_bar()
+```
+* * Most people purchased 10items, followed by those who purchased 1 item
+```{r}
+library(corrplot)
+```
+
+```{r}
+#Get the correlation matrix
+res = cor(nums)
+#Plotting a correlation plot
+corrplot(res, method="color",addCoef.col = "black",
+tl.col="black", tl.srt=45)
+```
+* There is perfect correlation
+between Tax, Cogs and gross income. There is also high correlation between Unit Price and Tax,cogs and gross.income and Total.
+
+## **Dimensionality Reduction**
+### **PCA**
+### **Feature Engineering**
+* All variables to be used for dimensionality reduction should be numerical variables, hence we will convert our factor categories to numerics.We will also drop the date and time columns.
+
+```{r}
+#First we will make a copy of our sales dataset for future use
+data <- sales
+#Dropping columns for date and time
+data <- subset(data, select = -c(Date, Time))
+head(data)
+
+```
+```{r}
+#Converting factor columns to numeric
+data$Branch <- as.numeric(data$Branch)
+data$Customer.type <- as.numeric(data$Customer.type)
+data$Gender <- as.numeric(data$Gender)
+data$Product.line <- as.numeric(data$Product.line)
+data$Payment <- as.numeric(data$Payment)
+data$Quantity <- as.numeric(data$Quantity)
+head(data)
+```
+```{r}
+install.packages("factoextra",dependencies = TRUE,repos = 'http://cran.rstudio.com/')
+```
+
+```{r}
+library(factoextra)
+```
+```{r}
+#Performing pca
+data.pca <- prcomp(data[,c(1:11)], center = TRUE, scale. = TRUE)
+summary(data.pca)
+```
+```{r}
+str(data.pca)
+```
+* We have obtained 11 principal components. Our first PC, PC1 explains 35.7% Variation, our second, PC2 explains 10.3%. The first 8 PCs gives us a variability proportion of upto 99%.
+```{r}
+#Graph of variables
+fviz_pca_var(data.pca,
+col.var = "contrib", # Color by contributions to the PC
+gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+repel = TRUE # Avoid text overlapping
+)
+
+```
+* Gross income, Tax and cogs contribute highly to the first PC whereas Gender, Payment mostly contribute to the second PC
+```{r}
+# Eigenvalues
+eig.val <- get_eigenvalue(data.pca)
+eig.val
+```
+* Since the first 8 Principal Components contribute upto 99.23% of the variance proportion, they can be used for analysis.
+
+## **Feature Selection**
+* Using Filter Method Using the filter method, we will check for correlation between variables. We will then remove variables that are highly correlated as that is a sign of redundancy.
+
+```{r}
+library(caret)
+```
+```{r}
+#Separating target variable with independent variables
+df <- data[-12]
+# Calculating the correlation matrix
+correlationMatrix <- cor(df)
+# Find attributes that are highly correlated
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff= 0.75)
+# Highly correlated attributes
+highlyCorrelated
+```
+```{r}
+names(df[,highlyCorrelated])
+```
+* Tax and Cogs are highly correlated.
+```{r}
+# Removing the highly correlated features
+df.feat<-df[-highlyCorrelated]
+# Performing a graphical comparison
+par(mfrow = c(1, 2))
+corrplot(correlationMatrix, order = "hclust")
+corrplot(cor(df.feat), order = "hclust")
+```
+
+## **Conclusion**
+* that the following features will be used for analysis: 
+- Gender
+- Payment
+- Customer type 
+- Rating 
+- Branch 
+- Unit price 
+- Product line 
+- Quantity 
+- Gross Income
+
+
+
+
+
+
+
+
+
+
+
+
+
+

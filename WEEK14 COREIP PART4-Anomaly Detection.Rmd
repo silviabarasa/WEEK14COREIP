@@ -1,0 +1,280 @@
+---
+title: "Anomaly Detection"
+author: "Silvia Wakasa Barasa"
+date: "7/16/2021"
+output: html_document
+---
+
+```{r}
+library(knitr)
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,eval = TRUE)
+```
+
+## **PROBLEM DEFINITION**
+### **a) Specifying the Question**
+Identify anomalies in the dataset = fraud detection
+
+### **b) Defining the metrics for success**
+check whether there are any anomalies in the given sales dataset. The objective of this task being fraud detection.
+
+### **c) Understanding the context**
+You are a Data analyst at Carrefour Kenya and are currently undertaking a project that will inform the marketing department on the most relevant marketing strategies that will result in the highest no. of sales (total price including tax). Your project has been divided into four parts where you’ll explore a recent marketing dataset by performing various unsupervised learning techniques and later providing recommendations based on your insights.
+
+### **d) Recording the Experimental Design**
+Define the question, the metric for success, the context, experimental design taken.
+Read and explore the given dataset.
+Identify anomalies in the dataset = fraud detection
+
+### **e) Relevance of the data**
+The data used for this project will inform the marketing department on the most relevant marketing strategies that will result in the highest no. of sales (total price including tax)
+
+[http://bit.ly/CarreFourSalesDataset].
+
+## **Data Analysis**
+## **Loading the required packages**
+```{r}
+#install.packages("anomalize") # Anormally detection
+library(anomalize)
+library(lubridate)
+library(tibbletime)
+```
+### **Loading the data**
+```{r}
+anom<-read.csv("C:/Users/Silvia/Downloads/Supermarket_Sales_Forecasting - Sales.csv")
+```
+
+## Data Processing
+
+```{r}
+# Previewing the first 6 rows
+head(anom)
+```
+```{r}
+# Previewing the datatypes of our data
+str(anom)
+```
+```{r}
+# totalling sales on their common shared dates
+anom_aggregate<-aggregate(anom$Sales,by=list(Date=anom$Date),FUN=sum)
+head(anom_aggregate)
+```
+```{r}
+#getting a dataframe of the frequency table of Date
+date_table<-data.frame(table(anom$Date))
+head(date_table)
+```
+```{r}
+library(tidyverse)
+```
+```{r}
+# combining both dataframes
+final_df<-merge(anom_aggregate,date_table,by.x= "Date", by.y="Var1")
+final_df
+```
+```{r}
+# Renaming columns
+names(final_df)<-c("Date","Total.Sales","count")
+head(final_df)
+```
+```{r}
+#Changing date column to Date format
+final_df$Date<-mdy(final_df$Date)
+str(final_df)
+```
+```{r}
+final_df1 <- final_df %>% select(Date,count)
+final_df1
+```
+
+```{r}
+# Convert df to a tibble
+final_df1 <- as_tibble(final_df1)
+class(final_df1)
+```
+```{r}
+df_anomalized <- final_df1 %>%
+    time_decompose(count, merge = TRUE) %>%
+    anomalize(remainder) %>%
+    time_recompose()
+df_anomalized %>% glimpse()
+```
+#### **Visualizing the anomalies**
+
+```{r}
+df_anomalized %>% plot_anomalies(ncol = 3, alpha_dots = 0.75)
+```
+#### **Adjusting Trend and Seasonality**
+```{r}
+p1 <- df_anomalized %>%
+    plot_anomaly_decomposition() +
+    ggtitle("Freq/Trend = 'auto'")
+p1
+```
+```{r}
+#When “auto” is used, a get_time_scale_template() is used to #determine the logical frequency and trend spans based on the scale #of the data. You can uncover the logic:
+
+get_time_scale_template()
+```
+* This implies that if the scale is 1 day (meaning the difference between each data point is 1 day), then the frequency will be 7 days (or 1 week) and the trend will be around 90 days (or 3 months). This logic can be easily adjusted in two ways: Local parameter adjustment & Global parameter adjustment.
+
+#### **Adjusting Local Parameters**
+```{r}
+p2 <- final_df1 %>%
+    time_decompose(count,
+                   frequency = "auto",
+                   trend     = "2 weeks") %>%
+    anomalize(remainder) %>%
+    plot_anomaly_decomposition() +
+    ggtitle("Trend = 2 Weeks (Local)")
+# Show plots
+p1
+p2
+
+```
+* After adjusting the trend using local parameters we can see some anomalies being detected.
+
+#### **Adjusting the Global Parameter**
+```{r}
+#Adjusting globally by using set_time_scale_template() to update the #default template to one that we prefer. We’ll change the “3 month” #trend to “2 weeks” for time scale = “day”. Use time_scale_template() #to retrieve the time scale template that anomalize begins with, #mutate() the trend field in the desired location, and use #set_time_scale_template() to update the template in the global #options. We can retrieve the updated template using #get_time_scale_template() to verify the change has been executed #properly.
+time_scale_template() %>%
+    mutate(trend = ifelse(time_scale == "day", "2 weeks", trend)) %>%
+    set_time_scale_template()
+get_time_scale_template()
+```
+```{r}
+#plotting to see changes
+p3 <- final_df1 %>%
+    time_decompose(count) %>%
+    anomalize(remainder) %>%
+    plot_anomaly_decomposition() +
+    ggtitle("Trend = 2 Weeks (Global)")
+p3
+```
+
+```{r}
+#Let’s reset the time scale template defaults back to the original #defaults.
+
+time_scale_template() %>%
+    set_time_scale_template()
+# Verify the change
+get_time_scale_template()
+```
+#### **Extracting the Anomalous Data Points**
+```{r}
+#Now, we can extract the actual datapoints which are anomalies. For #that, the following code can be run.
+
+final_df1 %>% 
+  time_decompose(count) %>%
+  anomalize(remainder) %>%
+  time_recompose() %>%
+  filter(anomaly == 'Yes')
+```
+* As we can see from our table there were no anomalies in the data.
+
+#### **Adjusting Alpha and Max Anoms**
+* **Alpha**
+```{r}
+#We can adjust alpha, which is set to 0.05 by default. By default, #the bands just cover the outside of the range.
+
+p4 <- final_df1 %>%
+    time_decompose(count) %>%
+    anomalize(remainder, alpha = 0.05, max_anoms = 0.2) %>%
+    time_recompose() %>%
+    plot_anomalies(time_recomposed = TRUE) +
+    ggtitle("alpha = 0.05")
+#> frequency = 7 days
+#> trend = 91 days
+p4
+
+```
+```{r}
+#If we decrease alpha, it increases the bands making it more #difficult to be an outlier. Here, you can see that the bands have #become twice big in size.
+
+p5 <- final_df1 %>%
+    time_decompose(count) %>%
+    anomalize(remainder, alpha = 0.025, max_anoms = 0.2) %>%
+    time_recompose() %>%
+    plot_anomalies(time_recomposed = TRUE) +
+    ggtitle("alpha = 0.05")
+#> frequency = 7 days
+#> trend = 91 days
+p5
+```
+*  **Max Anoms**
+```{r}
+#The max_anoms parameter is used to control the maximum percentage of #data that can be an anomaly. Let’s adjust alpha = 0.3 so pretty much #anything is an outlier. Now let’s try a comparison between max_anoms #= 0.2 (20% anomalies allowed) and max_anoms = 0.05 (5% anomalies #allowed).
+p6 <- final_df1 %>%
+    time_decompose(count) %>%
+    anomalize(remainder, alpha = 0.3, max_anoms = 0.2) %>%
+    time_recompose() %>%
+    plot_anomalies(time_recomposed = TRUE) +
+    ggtitle("20% Anomalies")
+#> frequency = 7 days
+#> trend = 91 days
+p7 <- final_df1 %>%
+    time_decompose(count) %>%
+    anomalize(remainder, alpha = 0.3, max_anoms = 0.05) %>%
+    time_recompose() %>%
+    plot_anomalies(time_recomposed = TRUE) +
+    ggtitle("5% Anomalies")
+#> frequency = 7 days
+#> trend = 91 days
+p6
+p7
+```
+* Adjusting the max anoms result in presence of anomalies in our data.
+
+#### **Using the ‘timetk’ package**
+##### **Interactive Anomaly Visualization**
+
+```{r}
+#Here, timetk’s plot_anomaly_diagnostics() function makes it possible #to tweak some of the parameters on the fly.
+final_df1 %>% timetk::plot_anomaly_diagnostics(Date,count, .facet_ncol = 2)
+```
+#### **Interactive Anomaly Detection**
+```{r}
+#To find the exact data points that are anomalies, we use #tk_anomaly_diagnostics() function.
+
+final_df1 %>% timetk::tk_anomaly_diagnostics(Date, count) %>% filter(anomaly=='Yes')
+
+```
+
+## **Conclusion**
+* From our observation we can see that there were no anomalies detected within our data.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,272 @@
+---
+title: "Association Analysis"
+author: "Silvia Wakasa Barasa"
+date: "7/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,eval = TRUE)
+```
+
+
+#https://rpubs.com/Jmdhcc/mba2
+#https://rstudio-pubs-static.s3.amazonaws.com/192221_2390ff48c0a64fcb9b0f6ad6b1b2b7f2.html
+
+#http://www.socr.umich.edu/people/dinov/courses/DSPA_notes/11_Apriory_AssocRuleLearning.html
+
+## **PROBLEM DEFINITION**
+### **a) Specifying the Question**
+create association rules that will allow you to identify relationships between variables in the dataset.
+
+### **b) Defining the metrics for success**
+This section will require that you create association rules that will allow you to identify relationships between variables in the dataset. You are provided with a separate dataset that comprises groups of items that will be associated with others. Just like in the other sections, you will also be required to provide insights for your analysis.
+
+### **c) Understanding the context**
+You are a Data analyst at Carrefour Kenya and are currently undertaking a project that will inform the marketing department on the most relevant marketing strategies that will result in the highest no. of sales (total price including tax). Your project has been divided into four parts where you’ll explore a recent marketing dataset by performing various unsupervised learning techniques and later providing recommendations based on your insights.
+
+### **d) Recording the Experimental Design**
+Define the question, the metric for success, the context, experimental design taken.
+Read and explore the given dataset.
+create association rules that will allow you to identify relationships between variables in the dataset.
+
+### **e) Relevance of the data**
+The data used for this project will inform the marketing department on the most relevant marketing strategies that will result in the highest no. of sales (total price including tax)
+
+[http://bit.ly/SupermarketDatasetII].
+
+## **DATA ANALYSIS**
+```{r}
+library(plyr)
+library(arulesViz)
+library(RColorBrewer)
+library(ggplot2)
+# Load libraries
+library(tidyverse) # data manipulation
+library(arules) # mining association rules and frequent itemsets
+#library(arulesViz) # visualization techniques for association rules
+library(knitr) # dynamic report generation
+library(gridExtra) # provides a number of user-level functions to work with "grid" graphics
+library(lubridate) # work with dates and times
+```
+#### **Loading our dataset**
+```{r}
+# Loading our dataset
+Supermarket_Sales <- read.transactions("C:/Users/Silvia/Documents/R module3 Core/week3/Supermarket_Sales_Dataset II.csv", sep = ",")
+Supermarket_Sales
+```
+
+#### **Data Exploration**
+```{r}
+# Verifying the object's class
+class(Supermarket_Sales)
+```
+* This shows us transactions as the type of data that we will need and the package arules which is necessary for our analysis.
+
+```{r}
+# Generating a summary of the transaction dataset
+# This would give us some information such as the most purchased items, 
+# distribution of the item sets (no. of items purchased in each transaction), etc.
+
+summary(Supermarket_Sales)
+```
+* Here you can see the most purchased items like mineral water,eggs,spaghetti,french fries,chocolate and the number of items purchased in them.
+
+```{r}
+# look at the first five transactions
+inspect(Supermarket_Sales[1:5])
+```
+
+```{r}
+# examine the frequency of items
+itemFrequency(Supermarket_Sales[, 1:3])
+```
+```{r}
+# Producing a chart of frequencies and fitering 
+# to consider only items with a minimum percentage 
+# of support/ considering a top x of items
+# ---
+# Displaying top 10 most common items in the transactions dataset 
+# and the items whose relative importance is at least 10%
+# 
+par(mfrow = c(1, 2))
+# plot the frequency of items
+itemFrequencyPlot(Supermarket_Sales, topN = 10,col="orange")
+itemFrequencyPlot(Supermarket_Sales, support = 0.1,col="pink")
+```
+* Here you can see that top 10 most common items in the transactions dataset and the items whose relative importance is at least 10% are mineral water,eggs,spaghetti,french fries,chocolate,green tea,milk
+
+```{r}
+# a visualization of the sparse matrix for the first five transactions
+image(Supermarket_Sales[1:5])
+```
+```{r}
+# visualization of a random sample of 100 transactions
+image(sample(Supermarket_Sales, 100))
+```
+```{r}
+#Training a model on the data 
+library(arules)
+# default settings result in zero rules learned
+apriori(Supermarket_Sales)
+```
+
+
+```{r}
+# Building a model based on association rules 
+# using the apriori function 
+# set better support and confidence levels to learn more rules
+# We use Min Support as 0.006 and confidence as 0.25
+# The minlen defines the minimum number of items in each itemset of frequent items which we use only 2.
+Supermarket_Sales_rules <- apriori(Supermarket_Sales, parameter = list(support =0.006, confidence = 0.25, minlen = 2))
+```
+
+```{r}
+Supermarket_Sales_rules
+```
+* Here we can see using a support of 0.006, confidence of 0.25 and minlen of 2 we obtain a set of 272 rules.
+
+```{r}
+#Evaluating model performance 
+# summary of grocery association rules
+summary(Supermarket_Sales_rules)
+```
+* Here we can see using a support of 0.006, confidence of 0.25 and minlen of 2 we obtain 7501 transactions.
+
+```{r}
+# inspect the first three rules
+inspect(Supermarket_Sales_rules[1:3])
+
+```
+* If someone buys tomato sauce they are 44% likely to buy spaghetti too
+* If someone buys light cream they are 47% likely to buy mineral water
+* If someone buys protein bar they are 42% likely to buy mineral water.
+
+```{r}
+# Improving model performance 
+# sorting grocery rules by confidence
+# then looking at the first five rules.
+inspect(sort(Supermarket_Sales_rules, by = "confidence", decreasing=TRUE)[1:5])
+
+```
+* The first rule has a confidence of 58,the second rule has a confidence of 56 the third rule has a cofidence of 55 the fourth rule has a confidence of 54 and the fifth rule has a confidence of 54.
+
+```{r}
+# finding subsets of rules containing any herb & pepper
+herb_pepper_rules <- subset(Supermarket_Sales_rules, items %in% "herb & pepper")
+inspect(herb_pepper_rules)
+```
+
+```{r}
+# writing the rules to a CSV file
+write(Supermarket_Sales_rules, file = "Supermarket_Sales_rules.csv",
+      sep = ",", quote = TRUE, row.names = FALSE)
+# converting the rule set to a data frame
+Supermarket_Sales_rules_df <- as(Supermarket_Sales_rules, "data.frame")
+# The rules identified by the algorithms 
+str(Supermarket_Sales_rules_df)
+```
+
+```{r}
+Supermarket_Sales_rules_df$rules
+```
+
+```{r}
+# Verifying the object's class
+# 
+class(Supermarket_Sales)
+```
+
+```{r}
+# Absolute Item Frequency Plot
+itemFrequencyPlot(Supermarket_Sales, topN=10, type="absolute", col="wheat2",xlab="Item name", 
+                  ylab="Frequency (absolute)", main="Absolute Item Frequency Plot")
+```
+```{r}
+# Generating a summary of the transaction dataset
+#  information such as the most purchased items, 
+# distribution of the item sets (no. of items purchased in each transaction), 
+summary(Supermarket_Sales)
+```
+
+```{r}
+# Create an item frequency plot for the top 10 items
+if (!require("RColorBrewer")) {
+  # install color package of R
+  install.packages("RColorBrewer")
+  #include library RColorBrewer
+  library(RColorBrewer)
+}
+```
+
+```{r}
+itemFrequency(Supermarket_Sales)
+```
+
+```{r}
+itemFrequencyPlot(Supermarket_Sales,topN=10,type="absolute",col=brewer.pal(8,'Pastel2'), main="Absolute Item Frequency Plot")
+itemFrequencyPlot(Supermarket_Sales,topN=10,type="relative",col=brewer.pal(8,'Pastel2'),main="Relative Item Frequency Plot")
+```
+
+```{r}
+# However since we built the model using 0.006 Min support 
+# and confidence as 0.25 we obtained 272 rules.
+# We use measures of significance and interest on the rules, 
+# determining which ones are interesting and which to discard.
+# However, in order to illustrate the sensitivity of the model to these two parameters, 
+# we will see what happens if we decrease the support or increase the confidence level
+
+# 
+association.rules <- apriori(Supermarket_Sales, parameter = list(supp=0.001, conf=0.8,maxlen=10))
+
+```
+
+```{r}
+summary(association.rules)
+```
+
+In our first example, we decreased the minimum support of 0.006 to 0.001 and model rules went from 272 to only 74. This would lead us to understand that using a high level of support can make the model lose and using a low confidence level increases the number of rules to quite an extent and many will not be useful.
+```{r}
+inspect(association.rules[1:10])
+```
+
+```{r}
+shorter.association.rules<- apriori(Supermarket_Sales, parameter = list(supp=0.001, conf=0.8, maxlen=3))
+```
+
+```{r}
+subset.rules<- which(colSums(is.subset(association.rules, association.rules))>1)
+length(subset.rules)
+```
+
+
+```{r}
+subset.association.rules. <- association.rules[-subset.rules]
+```
+
+```{r}
+bacon.association.rules <- apriori(Supermarket_Sales, parameter = list(supp=0.001, conf=0.8), appearance = list(default="lhs", rhs= "bacon"))
+```
+
+```{r}
+inspect(head(bacon.association.rules))
+```
+
+```{r}
+subRules <- association.rules[quality(association.rules)$confidence>0.4]
+plot(subRules)
+```
+
+
+```{r}
+plot(subRules, method = "two-key plot")
+```
+```{r}
+top10subRules <- head(subRules, n=10, by = "confidence")
+plot(top10subRules, method = "graph", engine= "htmlwidget")
+```
+
+```{r}
+subRules2<-head(subRules, n=10, by="lift")
+plot(subRules2, method = "paracoord")
+```
